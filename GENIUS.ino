@@ -1,5 +1,5 @@
-#include <Wire.h>
 #include <LiquidCrystal_I2C.h>
+#include <IRremote.h>
 
 LiquidCrystal_I2C lcd(0x20, 2, 1, 0, 4, 5, 6, 7, 3, POSITIVE);
 
@@ -8,24 +8,31 @@ LiquidCrystal_I2C lcd(0x20, 2, 1, 0, 4, 5, 6, 7, 3, POSITIVE);
 #define BINARY_SEGMENT3 14
 #define BINARY_SEGMENT4 15
 
-#define BLUE_BUTTON 5
-#define GREEN_BUTTON 6
-#define RED_BUTTON 7
-#define YELLOW_BUTTON 8
+#define RECV_PIN 4
 
-#define BLUE_LED 9
+#define RED_BUTTON 5
+#define GREEN_BUTTON 6
+#define YELLOW_BUTTON 7
+#define BLUE_BUTTON 8
+
+#define RED_LED 9
 #define GREEN_LED 10
-#define RED_LED 11
-#define YELLOW_LED 12
+#define YELLOW_LED 11
+#define BLUE_LED 12
 
 #define DEFAULT_BUZZER 13
 
 #define LDR 16
 #define LM35 17
 
+IRrecv irrecv(RECV_PIN);
+decode_results results;
+
 const int MAX_SEQUENCE = 9;
 const int HOLD_ON = 500;
 const int UNDEFINIED = -1;
+
+float weatherNow;
 
 int gameSet[MAX_SEQUENCE];
 int roundPlayer;
@@ -39,10 +46,11 @@ enum statusGame {
 };
 
 void setDisplayMessage(String line1, String line2) {
-  float weatherNow = analogRead(LM35) * 0.1075268817;
-
   line1 = (line1=="")?"WELCOME GAMER":line1;
   line2 = (line2=="")?"Weather Now: " + String((int) weatherNow) + "c":line2;
+
+  Serial.println(line1);
+  Serial.println(line2);
 
   lcd.clear();
 
@@ -53,6 +61,8 @@ void setDisplayMessage(String line1, String line2) {
 }
 
 void setDisplaySegment(int number) {
+  Serial.println(number);
+
   switch (number) {
     case 0:
       digitalWrite(BINARY_SEGMENT1, LOW);
@@ -137,12 +147,12 @@ void setColorMessage(int ledPort) {
       setDisplayMessage("GREEN (VERDE)","");
 
       break;
-    case BLUE_LED:
-      setDisplayMessage("BLUE (AZUL)","");
-
-      break;
     case YELLOW_LED:
       setDisplayMessage("YELLOW (AMARELO)","");
+
+      break;
+    case BLUE_LED:
+      setDisplayMessage("BLUE (AZUL)","");
 
       break;
   }
@@ -150,20 +160,35 @@ void setColorMessage(int ledPort) {
 
 void setPlayTone(int frequence, int duration) {
   tone(DEFAULT_BUZZER, frequence, duration);
+
+  delay(HOLD_ON / 10);
+
+  noTone(DEFAULT_BUZZER);
 }
 
 void setFlashLight(int ledPort, int waitingTime) {
   digitalWrite(ledPort, HIGH);
   delay(waitingTime);
 
-  setPlayTone(ledPort * 400, 200);
+  setPlayTone(ledPort * 400, HOLD_ON);
 
   digitalWrite(ledPort, LOW);
   delay(waitingTime);
 }
 
 int getButtonPressed() {
-  if (digitalRead(RED_BUTTON) == LOW) {
+  char keyPress = Serial.read();
+  String remoteControl;
+
+  if (irrecv.decode(&results)) {
+    remoteControl = String(results.value, HEX);
+
+    delay(HOLD_ON / 2);
+
+    irrecv.resume();
+  }
+
+  if (digitalRead(RED_BUTTON) == LOW || keyPress == 'R' || remoteControl == "e0e036c9") {
     setColorMessage(RED_LED);
     setFlashLight(RED_LED, HOLD_ON);
     setDisplayMessage("NEXT COLOR","");
@@ -171,7 +196,7 @@ int getButtonPressed() {
     return RED_LED;
   }
 
-  if (digitalRead(GREEN_BUTTON) == LOW) {
+  if (digitalRead(GREEN_BUTTON) == LOW || keyPress == 'G' || remoteControl == "e0e028d7") {
     setColorMessage(GREEN_LED);
     setFlashLight(GREEN_LED, HOLD_ON);
     setDisplayMessage("NEXT COLOR","");
@@ -179,20 +204,20 @@ int getButtonPressed() {
     return GREEN_LED;
   }
 
-  if (digitalRead(BLUE_BUTTON) == LOW) {
-    setColorMessage(BLUE_LED);
-    setFlashLight(BLUE_LED, HOLD_ON);
-    setDisplayMessage("NEXT COLOR","");
-
-    return BLUE_LED;
-  }
-
-  if (digitalRead(YELLOW_BUTTON) == LOW) {
+  if (digitalRead(YELLOW_BUTTON) == LOW || keyPress == 'Y' || remoteControl == "e0e0a857") {
     setColorMessage(YELLOW_LED);
     setFlashLight(YELLOW_LED, HOLD_ON);
     setDisplayMessage("NEXT COLOR","");
 
     return YELLOW_LED;
+  }
+
+  if (digitalRead(BLUE_BUTTON) == LOW || keyPress == 'B' || remoteControl == "e0e06897") {
+    setColorMessage(BLUE_LED);
+    setFlashLight(BLUE_LED, HOLD_ON);
+    setDisplayMessage("NEXT COLOR","");
+
+    return BLUE_LED;
   }
 
   return UNDEFINIED;
@@ -201,11 +226,8 @@ int getButtonPressed() {
 void playRoundSequence() {
   for (int i = 0; i < roundPlayer; i++) {
     setDisplaySegment(i+1);
-
     setColorMessage(gameSet[i]);
-
     setFlashLight(gameSet[i], HOLD_ON);
-
     setDisplayMessage("PLAY SEQUENCE","");
   }
 }
@@ -250,17 +272,38 @@ int getStatusGame() {
 void welcome() {
   digitalWrite(RED_LED, HIGH);
   digitalWrite(GREEN_LED, HIGH);
-  digitalWrite(BLUE_LED, HIGH);
   digitalWrite(YELLOW_LED, HIGH);
+  digitalWrite(BLUE_LED, HIGH);
 
-  delay(400);
+  delay(HOLD_ON);
 
   digitalWrite(RED_LED, LOW);
   digitalWrite(GREEN_LED, LOW);
-  digitalWrite(BLUE_LED, LOW);
   digitalWrite(YELLOW_LED, LOW);
+  digitalWrite(BLUE_LED, LOW);
 
-  delay(400);
+  delay(HOLD_ON);
+}
+
+void newGame() {
+  for(int i = 0; i < 1024; i++) {
+    weatherNow = weatherNow + analogRead(LM35);
+  }
+
+  weatherNow = weatherNow / 1024;
+  weatherNow = weatherNow * (1.1 / 1024);
+  weatherNow = weatherNow * 100;
+
+  roundPlayer = 0;
+  rightAnswer = 0;
+
+  randomSeed(analogRead(A7));
+
+  for (int i = 0; i < MAX_SEQUENCE; i++) {
+    gameSet[i] = random(RED_LED, BLUE_LED + 1);
+  }
+
+  welcome();
 }
 
 void congratulation() {
@@ -278,47 +321,34 @@ void congratulation() {
 void fail() {
   setDisplayMessage("YOU LOOSE!","Try Again...");
 
-  setPlayTone(2048, 256);
+  setPlayTone(2048, HOLD_ON);
 
   digitalWrite(RED_LED, HIGH);
   digitalWrite(GREEN_LED, HIGH);
-  digitalWrite(BLUE_LED, HIGH);
   digitalWrite(YELLOW_LED, HIGH);
+  digitalWrite(BLUE_LED, HIGH);
 
   setDisplaySegment(0);
 
-  delay(300);
+  delay(HOLD_ON / 2);
 
   newGame();
 }
 
-void newGame() {
-  roundPlayer = 0;
-  rightAnswer = 0;
-
-  randomSeed(analogRead(A7));
-
-  for (int i = 0; i < MAX_SEQUENCE; i++) {
-    gameSet[i] = random(BLUE_LED, YELLOW_LED + 1);
-  }
-
-  welcome();
-}
-
 void setup() {
-  //Serial.begin(9600);
+  Serial.begin(9600);
 
   analogReference(INTERNAL);
 
   pinMode(RED_BUTTON, INPUT_PULLUP);
   pinMode(GREEN_BUTTON, INPUT_PULLUP);
-  pinMode(BLUE_BUTTON, INPUT_PULLUP);
   pinMode(YELLOW_BUTTON, INPUT_PULLUP);
+  pinMode(BLUE_BUTTON, INPUT_PULLUP);
 
   pinMode(RED_LED, OUTPUT);
   pinMode(GREEN_LED, OUTPUT);
-  pinMode(BLUE_LED, OUTPUT);
   pinMode(YELLOW_LED, OUTPUT);
+  pinMode(BLUE_LED, OUTPUT);
 
   pinMode(BINARY_SEGMENT1, OUTPUT);
   pinMode(BINARY_SEGMENT2, OUTPUT);
@@ -328,6 +358,7 @@ void setup() {
   pinMode(DEFAULT_BUZZER, OUTPUT);
 
   lcd.begin (16, 2);
+  irrecv.enableIRIn();
 
   setDisplayMessage("WELCOME GAMER","decade.com.br");
 
@@ -335,9 +366,7 @@ void setup() {
 }
 
 void loop() {
-  int luminosity = map(analogRead(LDR), 0, 1023, 0, 100);
-
-  if (luminosity < 50) {
+  if (map(analogRead(LDR), 0, 1023, 0, 100) < 50) {
     lcd.setBacklight(HIGH);
   } else {
     lcd.setBacklight(LOW);
@@ -345,24 +374,18 @@ void loop() {
 
   switch (getStatusGame()) {
     case READY_TO_PLAY:
-      //Serial.println("READY_TO_PLAY");
-
       setRoundPlayer();
       break;
     case WAITING_RESPONSE:
-      //Serial.println("WAITING_RESPONSE");
-
       setRightAnswer();
       break;
     case YOU_WIN:
-      //Serial.println("YOU_WIN");
-
       congratulation();
       break;
     case GAME_OVER:
-      //Serial.println("GAME_OVER");
-
       fail();
       break;
   }
+
+  delay(HOLD_ON / 50);
 }
