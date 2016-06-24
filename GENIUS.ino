@@ -44,6 +44,9 @@ void setDisplayMessage(String line1, String line2) {
   line1 = (line1=="")?"WELCOME GAMER":line1;
   line2 = (line2=="")?"Weather Now: " + String((int) weatherNow) + "c":line2;
 
+  Serial.println(line1);
+  Serial.println(line2);
+
   lcd.clear();
 
   lcd.setCursor(0, 0);
@@ -53,6 +56,8 @@ void setDisplayMessage(String line1, String line2) {
 }
 
 void setDisplaySegment(int number) {
+  Serial.println(number);
+
   switch (number) {
     case 0:
       digitalWrite(BINARY_SEGMENT1, LOW);
@@ -163,7 +168,9 @@ void setFlashLight(int ledPort, int waitingTime) {
 }
 
 int getButtonPressed() {
-  if (digitalRead(RED_BUTTON) == LOW) {
+  char keyPress = Serial.read();
+
+  if (digitalRead(RED_BUTTON) == LOW || keyPress == 'R') {
     setColorMessage(RED_LED);
     setFlashLight(RED_LED, HOLD_ON);
     setDisplayMessage("NEXT COLOR","");
@@ -171,7 +178,7 @@ int getButtonPressed() {
     return RED_LED;
   }
 
-  if (digitalRead(GREEN_BUTTON) == LOW) {
+  if (digitalRead(GREEN_BUTTON) == LOW || keyPress == 'G') {
     setColorMessage(GREEN_LED);
     setFlashLight(GREEN_LED, HOLD_ON);
     setDisplayMessage("NEXT COLOR","");
@@ -179,7 +186,7 @@ int getButtonPressed() {
     return GREEN_LED;
   }
 
-  if (digitalRead(BLUE_BUTTON) == LOW) {
+  if (digitalRead(BLUE_BUTTON) == LOW || keyPress == 'B') {
     setColorMessage(BLUE_LED);
     setFlashLight(BLUE_LED, HOLD_ON);
     setDisplayMessage("NEXT COLOR","");
@@ -187,7 +194,7 @@ int getButtonPressed() {
     return BLUE_LED;
   }
 
-  if (digitalRead(YELLOW_BUTTON) == LOW) {
+  if (digitalRead(YELLOW_BUTTON) == LOW || keyPress == 'Y') {
     setColorMessage(YELLOW_LED);
     setFlashLight(YELLOW_LED, HOLD_ON);
     setDisplayMessage("NEXT COLOR","");
@@ -306,7 +313,7 @@ void newGame() {
 }
 
 void setup() {
-  //Serial.begin(9600);
+  Serial.begin(9600);
 
   analogReference(INTERNAL);
 
@@ -335,9 +342,7 @@ void setup() {
 }
 
 void loop() {
-  int luminosity = map(analogRead(LDR), 0, 1023, 0, 100);
-
-  if (luminosity < 50) {
+  if (map(analogRead(LDR), 0, 1023, 0, 100) < 50) {
     lcd.setBacklight(HIGH);
   } else {
     lcd.setBacklight(LOW);
@@ -345,23 +350,15 @@ void loop() {
 
   switch (getStatusGame()) {
     case READY_TO_PLAY:
-      //Serial.println("READY_TO_PLAY");
-
       setRoundPlayer();
       break;
     case WAITING_RESPONSE:
-      //Serial.println("WAITING_RESPONSE");
-
       setRightAnswer();
       break;
     case YOU_WIN:
-      //Serial.println("YOU_WIN");
-
       congratulation();
       break;
     case GAME_OVER:
-      //Serial.println("GAME_OVER");
-
       fail();
       break;
   }
